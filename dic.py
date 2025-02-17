@@ -350,3 +350,49 @@ def plot_data_and_fit(ds, force_double_samples=None):
     )
     
     return ds
+
+
+def combine_inflections(ds: xr.Dataset) -> xr.Dataset:
+    """
+    Given a dataset with the following variables:
+      - 'inflection1_x', 'inflection2_x'
+      - 'inflection1_y', 'inflection2_y'
+      - 'inflection1_error', 'inflection2_error'
+    
+    This function compares the y variables for each sample and, for each sample:
+      - Chooses the pair (x, y, error) corresponding to the lower y value.
+      - If one y value is NaN, the non-NaN value is chosen.
+      - In the event of a tie (both non-NaN and equal), the first pair is chosen.
+    
+    The chosen x value is stored as 'dic_inflection_x',
+    the chosen y value as 'dic_inflection_y', and
+    the corresponding error as 'dic_error'.
+    """
+    # Extract the variables from the dataset
+    x1 = ds['inflection1_x']
+    x2 = ds['inflection2_x']
+    y1 = ds['inflection1_y']
+    y2 = ds['inflection2_y']
+    err1 = ds['inflection1_error']
+    err2 = ds['inflection2_error']
+    
+    # Create a boolean mask that is True where the first set of values should be chosen.
+    # The rule is:
+    # - If y1 is not NaN, and
+    # - Either y1 is less than or equal to y2 or y2 is NaN,
+    # then choose the first set.
+    choose_first = (~y1.isnull()) & ((y1 <= y2) | y2.isnull())
+    
+    # Select the appropriate values based on the mask.
+    dic_inflection_x = xr.where(choose_first, x1, x2)
+    dic_inflection_y = xr.where(choose_first, y1, y2)
+    dic_error        = xr.where(choose_first, err1, err2)
+    
+    # Add the new variables to the dataset
+    ds = ds.assign(
+        dic_inflection_x=dic_inflection_x,
+        dic_inflection_y=dic_inflection_y,
+        dic_inflection_error=dic_error
+    )
+    
+    return ds
